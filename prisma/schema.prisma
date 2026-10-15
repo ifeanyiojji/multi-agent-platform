@@ -1,0 +1,87 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum WorkflowStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum TaskStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  SKIPPED
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  name         String?
+  passwordHash String
+  createdAt    DateTime   @default(now())
+  workflows    Workflow[]
+}
+
+model Workflow {
+  id               String         @id @default(cuid())
+  userId           String
+  title            String
+  prompt           String         @db.Text
+  status           WorkflowStatus @default(QUEUED)
+  report           String?        @db.Text
+  errorMessage     String?
+  totalTokens      Int            @default(0)
+  estimatedCostUsd Float          @default(0)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  startedAt        DateTime?
+  completedAt      DateTime?
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks            WorkflowTask[]
+  events           WorkflowEvent[]
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+}
+
+model WorkflowTask {
+  id          String     @id @default(cuid())
+  workflowId  String
+  agentKey    String
+  name        String
+  status      TaskStatus @default(PENDING)
+  input       String     @db.Text
+  output      String?    @db.Text
+  attempts    Int        @default(0)
+  tokenCount  Int        @default(0)
+  costUsd     Float      @default(0)
+  startedAt   DateTime?
+  completedAt DateTime?
+  workflow    Workflow   @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowId, agentKey])
+  @@index([workflowId, status])
+}
+
+model WorkflowEvent {
+  id         String   @id @default(cuid())
+  workflowId String
+  type       String
+  agentKey   String?
+  message    String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId, createdAt])
+}
